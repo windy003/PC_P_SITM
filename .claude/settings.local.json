@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(move \"D:\\files\\using\\PC_P_SITM\\screenshot_tool.py\" \"D:\\files\\using\\PC_P_SITM\\screenshot_tool.pyw\")",
+      "Bash(cmd.exe /c move \"screenshot_tool.py\" \"screenshot_tool.pyw\")",
+      "Bash(copy:*)",
+      "Bash(cmd.exe /c \"copy screenshot_tool.py screenshot_tool.pyw\")",
+      "Bash(cmd.exe /c \"dir *.pyw\")",
+      "Bash(cmd.exe /c \"cd /d D:\\files\\using\\PC_P_SITM && copy screenshot_tool.py screenshot_tool.pyw && echo Success\")",
+      "Bash(cp:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
