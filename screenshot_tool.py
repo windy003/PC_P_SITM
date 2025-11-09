@@ -91,6 +91,10 @@ class ScreenshotEditor(QMainWindow):
         self.last_point = QPoint()
         self.pen_width = 3
         self.pen_color = Qt.red
+        self.draw_mode = "line"  # "line" or "arrow"
+        self.arrow_start = QPoint()
+        self.arrow_end = QPoint()
+        self.temp_arrow_drawing = False
 
         self.setWindowTitle("截图编辑")
         self.setWindowState(Qt.WindowFullScreen)
@@ -180,6 +184,35 @@ class ScreenshotEditor(QMainWindow):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(20)
 
+        # 画线按钮
+        self.line_btn = QPushButton("✏️ 画线")
+        self.line_btn.clicked.connect(self.set_line_mode)
+        btn_layout.addWidget(self.line_btn)
+
+        # 画箭头按钮
+        self.arrow_btn = QPushButton("➡️ 画箭头")
+        self.arrow_btn.clicked.connect(self.set_arrow_mode)
+        self.arrow_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 8px;
+                font-size: 18px;
+                font-weight: bold;
+                min-width: 150px;
+                min-height: 60px;
+            }
+            QPushButton:hover {
+                background-color: #0b7dda;
+            }
+            QPushButton:pressed {
+                background-color: #0a6fc2;
+            }
+        """)
+        btn_layout.addWidget(self.arrow_btn)
+
         # 保存按钮
         self.save_btn = QPushButton("✓ 保存")
         self.save_btn.clicked.connect(self.save_screenshot)
@@ -210,32 +243,159 @@ class ScreenshotEditor(QMainWindow):
         painter = QPainter(self)
         painter.drawPixmap(0, 0, self.canvas)
 
+        # 如果正在绘制临时箭头，显示预览
+        if self.temp_arrow_drawing and self.draw_mode == "arrow":
+            pen = QPen(self.pen_color, self.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            painter.setPen(pen)
+            self.draw_arrow(painter, self.arrow_start, self.arrow_end)
+
     def mousePressEvent(self, event):
         """鼠标/触摸按下事件"""
         if event.button() == Qt.LeftButton:
             # 检查是否点击在工具栏区域
             if self.toolbar.geometry().contains(event.pos()):
                 return
-            self.drawing = True
-            self.last_point = event.pos()
+
+            if self.draw_mode == "line":
+                self.drawing = True
+                self.last_point = event.pos()
+            elif self.draw_mode == "arrow":
+                self.temp_arrow_drawing = True
+                self.arrow_start = event.pos()
+                self.arrow_end = event.pos()
 
     def mouseMoveEvent(self, event):
         """鼠标/触摸移动事件 - 绘制画笔"""
-        if self.drawing and event.buttons() & Qt.LeftButton:
+        if event.buttons() & Qt.LeftButton:
             # 检查是否在工具栏区域
             if self.toolbar.geometry().contains(event.pos()):
                 return
-            painter = QPainter(self.canvas)
-            pen = QPen(self.pen_color, self.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
-            painter.setPen(pen)
-            painter.drawLine(self.last_point, event.pos())
-            self.last_point = event.pos()
-            self.update()
+
+            if self.draw_mode == "line" and self.drawing:
+                painter = QPainter(self.canvas)
+                pen = QPen(self.pen_color, self.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                painter.setPen(pen)
+                painter.drawLine(self.last_point, event.pos())
+                self.last_point = event.pos()
+                self.update()
+            elif self.draw_mode == "arrow" and self.temp_arrow_drawing:
+                self.arrow_end = event.pos()
+                self.update()
 
     def mouseReleaseEvent(self, event):
         """鼠标/触摸释放事件"""
         if event.button() == Qt.LeftButton:
-            self.drawing = False
+            if self.draw_mode == "line":
+                self.drawing = False
+            elif self.draw_mode == "arrow" and self.temp_arrow_drawing:
+                # 将箭头绘制到画布上
+                painter = QPainter(self.canvas)
+                pen = QPen(self.pen_color, self.pen_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                painter.setPen(pen)
+                self.draw_arrow(painter, self.arrow_start, self.arrow_end)
+                painter.end()
+                self.temp_arrow_drawing = False
+                self.update()
+
+    def draw_arrow(self, painter, start, end):
+        """绘制箭头"""
+        import math
+
+        # 绘制箭头主线
+        painter.drawLine(start, end)
+
+        # 计算箭头方向
+        dx = end.x() - start.x()
+        dy = end.y() - start.y()
+        length = math.sqrt(dx * dx + dy * dy)
+
+        if length < 10:  # 太短不绘制箭头头部
+            return
+
+        # 归一化方向向量
+        dx = dx / length
+        dy = dy / length
+
+        # 箭头头部大小
+        arrow_size = min(30, length / 3)
+        arrow_angle = 0.4  # 箭头角度（弧度）
+
+        # 计算箭头两个翼的端点
+        # 左翼
+        left_x = end.x() - arrow_size * (dx * math.cos(arrow_angle) + dy * math.sin(arrow_angle))
+        left_y = end.y() - arrow_size * (dy * math.cos(arrow_angle) - dx * math.sin(arrow_angle))
+
+        # 右翼
+        right_x = end.x() - arrow_size * (dx * math.cos(arrow_angle) - dy * math.sin(arrow_angle))
+        right_y = end.y() - arrow_size * (dy * math.cos(arrow_angle) + dx * math.sin(arrow_angle))
+
+        # 绘制箭头头部
+        painter.drawLine(end, QPoint(int(left_x), int(left_y)))
+        painter.drawLine(end, QPoint(int(right_x), int(right_y)))
+
+    def set_line_mode(self):
+        """设置为画线模式"""
+        self.draw_mode = "line"
+        self.hint_label.setText("✏️ 手指拖动画红线标注 | 按住此框可移动")
+        # 更新按钮样式
+        self.line_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 8px;
+                font-size: 18px;
+                font-weight: bold;
+                min-width: 150px;
+                min-height: 60px;
+            }
+        """)
+        self.arrow_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 8px;
+                font-size: 18px;
+                font-weight: bold;
+                min-width: 150px;
+                min-height: 60px;
+            }
+        """)
+
+    def set_arrow_mode(self):
+        """设置为画箭头模式"""
+        self.draw_mode = "arrow"
+        self.hint_label.setText("➡️ 拖动画箭头标注 | 按住此框可移动")
+        # 更新按钮样式
+        self.arrow_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 8px;
+                font-size: 18px;
+                font-weight: bold;
+                min-width: 150px;
+                min-height: 60px;
+            }
+        """)
+        self.line_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 8px;
+                font-size: 18px;
+                font-weight: bold;
+                min-width: 150px;
+                min-height: 60px;
+            }
+        """)
 
     def keyPressEvent(self, event):
         """键盘事件"""
